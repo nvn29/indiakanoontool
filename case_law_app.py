@@ -1,9 +1,13 @@
 import streamlit as st
-import requests, pandas as pd, io, re
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+import io, re
 from fpdf import FPDF
 from docx import Document
 from PIL import Image
 
+# --- Page Config ---
 st.set_page_config("Indian Case Law Search Tool", ":balance_scale:", layout="centered")
 
 # --- Header / Logo ---
@@ -46,24 +50,17 @@ with st.sidebar:
     keyword = keyword_input
 
     court = st.selectbox("⚖️ Court", ["All Courts","Supreme Court","Allahabad High Court",
-        "Andhra Pradesh High Court","Bombay High Court","Calcutta High Court","Chhattisgarh High Court",
-        "Delhi High Court","Gauhati High Court","Gujarat High Court","Himachal Pradesh High Court",
-        "Jammu & Kashmir and Ladakh High Court","Jharkhand High Court","Karnataka High Court",
-        "Kerala High Court","Madhya Pradesh High Court","Madras High Court","Manipur High Court",
-        "Meghalaya High Court","Orissa High Court","Patna High Court","Punjab & Haryana High Court",
-        "Rajasthan High Court","Sikkim High Court","Telangana High Court","Tripura High Court",
-        "Uttarakhand High Court"])
+        "Bombay High Court","Calcutta High Court","Delhi High Court","Madras High Court",
+        "Punjab & Haryana High Court","Rajasthan High Court","Kerala High Court"])
 
     year_range = st.slider("📅 Year Range", 1950, 2025, (1950, 2025))
     ipc_filter_enabled = st.checkbox("📘 IPC-only")
 
-    districts = ["All","Gurgaon","Rewari","Pune","Mumbai","Bangalore","Chennai","Delhi",
-                 "Lucknow","Hyderabad","Kolkata","Jaipur","Ahmedabad","Bhopal","Patna","Indore","Kanpur"]
+    districts = ["All","Delhi","Mumbai","Bangalore","Chennai","Kolkata","Jaipur","Lucknow"]
     auto_detected = next((d for d in districts if d.lower() in keyword.lower()), None)
     default_index = districts.index(auto_detected) if auto_detected in districts else 0
 
     if court == "All Courts":
-        st.info("📌 District disabled when 'All Courts' selected.")
         district = None
     else:
         district_option = st.selectbox("🏛️ District", districts, index=default_index)
@@ -100,31 +97,28 @@ def export_excel(data):
     buf.seek(0)
     return buf
 
-# --- Helper: broaden keyword by removing year ---
-def broaden_keyword(kw):
-    return re.sub(r'\b\d{4}\b', '', kw).strip()
-
-# --- API Token ---
-KANNOON_API_TOKEN = st.secrets["KANNOON_API_TOKEN"]
-HEADERS = {
-    "Authorization": f"Token {KANNOON_API_TOKEN}",
-    "Accept": "application/json"
-}
-
-# --- API Search Function ---
-def search_api(keyword, pagenum=0):
-    url = f"https://api.indiankanoon.org/search/?formInput={keyword}&pagenum={pagenum}"
+# --- Scraping Function ---
+def search_scrape(keyword, pagenum=0):
+    url = f"https://indiankanoon.org/search/?formInput={keyword}&pagenum={pagenum}"
     try:
-        res = requests.get(url, headers=HEADERS, timeout=30)
+        res = requests.get(url, timeout=30)
         res.raise_for_status()
-        data = res.json()
-        cases=[]
-        for c in data.get("docs", []):
-            title = c.get("title", "")
-            link = f"https://indiankanoon.org/doc/{c.get('tid','')}/"
-            snippet = c.get("snippet","")
-            year_match = re.search(r'\b(19|20)\d{2}\b', snippet)
+        soup = BeautifulSoup(res.text, "html.parser")
+
+        cases = []
+        for div in soup.select("div.result_title"):
+            title = div.get_text(strip=True)
+            link = "https://indiankanoon.org" + div.a["href"]
+
+            # Extract year if present
+            year_match = re.search(r'\b(19|20)\d{2}\b', title)
             year = int(year_match.group()) if year_match else "-"
+
+            # Extract snippet
+            snippet_tag = div.find_next("div", class_="snippet")
+            snippet = snippet_tag.get_text(" ", strip=True) if snippet_tag else ""
+
+            # Detected Acts
             acts_found = [act for act in known_acts if act.lower() in snippet.lower()]
 
             # Apply filters
@@ -134,7 +128,7 @@ def search_api(keyword, pagenum=0):
                 continue
             if district and district.lower() not in title.lower():
                 continue
-            if ipc_filter_enabled and "IPC" not in snippet.upper():
+            if ipc_filter_enabled and "ipc" not in snippet.lower():
                 continue
 
             cases.append({
@@ -145,20 +139,13 @@ def search_api(keyword, pagenum=0):
             })
         return cases
     except Exception as e:
-        st.error(f"API Request Failed on page {pagenum}: {e}")
+        st.error(f"Scraping failed on page {pagenum}: {e}")
         return []
 
 # --- Main Search ---
 if keyword:
     st.write(f"### 📂 Search Results for: `{keyword}`")
-    cases = search_api(keyword)
-    # If no results, try broader keyword
-    if not cases:
-        keyword_broad = broaden_keyword(keyword)
-        if keyword_broad != keyword:
-            st.info(f"No exact results. Searching broader keyword: `{keyword_broad}`")
-            cases = search_api(keyword_broad)
-
+    cases = search_scrape(keyword)
     if not cases:
         st.info("No results found.")
     else:
