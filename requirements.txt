@@ -1,8 +1,9 @@
 streamlit
 requests
 pandas
-beautifulsoup4
 fpdf
 python-docx
 Pillow
+beautifulsoup4
+lxml
 xlsxwriter

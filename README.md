@@ -1,46 +1,27 @@
-\# ⚖️ Indian Case Law Search Tool  
+# ⚖️ Indian Case Law Search Tool
 
-
-
-A simple and interactive \*\*legal research tool\*\* built with \[Streamlit](https://streamlit.io/) that fetches case law results from \*\*Indian Kanoon\*\* and provides smart filters like \*\*Court, Year, IPC-only filter, District detection, and Act detection\*\*.  
-
-
+A Streamlit web app to search and filter Indian case law from [Indian Kanoon](https://indiankanoon.org).  
+This version uses **web scraping (no API token required)** and includes smart filters, export options, and citation formats.
 
 ---
 
-
-
-\## ✨ Features  
-
-\- 🔍 Search by keyword  
-
-\- 🏛️ Filter by Court and District  
-
-\- 📅 Year range filter (1950–2025)  
-
-\- 📘 IPC-only search  
-
-\- 📑 Auto-detects Acts mentioned in the case  
-
-\- 📂 Export results to \*\*PDF, DOCX, Excel\*\*  
-
-\- 📜 Provides both \*\*Bluebook\*\* and \*\*APA\*\* citations  
-
-
+## 🚀 Features
+- 🔍 **Keyword Search** with auto-suggestions for major Acts  
+- ⚖️ **Court filter** (Supreme Court & all major High Courts)  
+- 🏛️ **District filter** (auto-detect from keyword)  
+- 📅 **Year range filter** (1950–2025)  
+- 📘 **IPC-only filter**  
+- 📂 **Smart Act Detection** (highlights Acts in results)  
+- 📄 Export results as **PDF, DOCX, Excel**  
+- 📖 Auto-generated **Bluebook & APA citations**  
 
 ---
 
+## 📦 Installation (Local)
 
-
-\## 🚀 Getting Started  
-
-
-
-\### 1. Clone the repo  
+Clone this repository and install dependencies:
 
 ```bash
-
-git clone https://github.com/YOUR\_USERNAME/indiankanoon-search-tool.git
-
-cd indiankanoon-search-tool
-
+git clone https://github.com/your-username/case-law-tool.git
+cd case-law-tool
+pip install -r requirements.txt
