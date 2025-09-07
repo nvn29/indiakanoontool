@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-import io, re
+import io, re, random
 from fpdf import FPDF
 from docx import Document
 from PIL import Image
@@ -49,14 +49,17 @@ with st.sidebar:
 
     keyword = keyword_input
 
-    court = st.selectbox("⚖️ Court", ["All Courts","Supreme Court","Allahabad High Court",
-        "Bombay High Court","Calcutta High Court","Delhi High Court","Madras High Court",
-        "Punjab & Haryana High Court","Rajasthan High Court","Kerala High Court"])
+    court = st.selectbox("⚖️ Court", [
+        "All Courts", "Supreme Court", "Allahabad High Court",
+        "Bombay High Court", "Calcutta High Court", "Delhi High Court",
+        "Madras High Court", "Punjab & Haryana High Court",
+        "Rajasthan High Court", "Kerala High Court"
+    ])
 
     year_range = st.slider("📅 Year Range", 1950, 2025, (1950, 2025))
     ipc_filter_enabled = st.checkbox("📘 IPC-only")
 
-    districts = ["All","Delhi","Mumbai","Bangalore","Chennai","Kolkata","Jaipur","Lucknow"]
+    districts = ["All", "Delhi", "Mumbai", "Bangalore", "Chennai", "Kolkata", "Jaipur", "Lucknow"]
     auto_detected = next((d for d in districts if d.lower() in keyword.lower()), None)
     default_index = districts.index(auto_detected) if auto_detected in districts else 0
 
@@ -75,16 +78,16 @@ def export_pdf(data):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-    pdf.cell(200,10,"Indian Case Law Results",ln=True,align="C")
-    for i,c in enumerate(data,1):
-        pdf.multi_cell(0,10,f"{i}. {c['Title']}, {c['Court']} ({c['Year']})\n{c['Link']}\n")
+    pdf.cell(200, 10, "Indian Case Law Results", ln=True, align="C")
+    for i, c in enumerate(data, 1):
+        pdf.multi_cell(0, 10, f"{i}. {c['Title']}, {c['Court']} ({c['Year']})\n{c['Link']}\n")
     return pdf.output(dest="S").encode("latin1")
 
 def export_docx(data):
     doc = Document()
-    doc.add_heading("Indian Case Law Results",0)
-    for i,c in enumerate(data,1):
-        doc.add_paragraph(f"{i}. {c['Title']}, {c['Court']} ({c['Year']})",style="List Number")
+    doc.add_heading("Indian Case Law Results", 0)
+    for i, c in enumerate(data, 1):
+        doc.add_paragraph(f"{i}. {c['Title']}, {c['Court']} ({c['Year']})", style="List Number")
         doc.add_paragraph(f"Link: {c['Link']}")
     buf = io.BytesIO()
     doc.save(buf)
@@ -93,15 +96,25 @@ def export_docx(data):
 
 def export_excel(data):
     buf = io.BytesIO()
-    pd.DataFrame(data).to_excel(buf,index=False,sheet_name="Cases",engine="xlsxwriter")
+    pd.DataFrame(data).to_excel(buf, index=False, sheet_name="Cases", engine="xlsxwriter")
     buf.seek(0)
     return buf
+
+# --- User Agents for rotation ---
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/119.0",
+]
 
 # --- Scraping Function ---
 def search_scrape(keyword, pagenum=0):
     url = f"https://indiankanoon.org/search/?formInput={keyword}&pagenum={pagenum}"
+    headers = {"User-Agent": random.choice(USER_AGENTS)}
     try:
-        res = requests.get(url, timeout=30)
+        res = requests.get(url, headers=headers, timeout=30)
         res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
 
@@ -132,7 +145,10 @@ def search_scrape(keyword, pagenum=0):
                 continue
 
             cases.append({
-                "Title": title, "Link": link, "Year": year, "Court": court,
+                "Title": title,
+                "Link": link,
+                "Year": year,
+                "Court": court,
                 "Bluebook Citation": f"{title}, {court} ({year})",
                 "APA Citation": f"{court}. ({year}). {title}. Retrieved from {link}",
                 "Detected Acts": ", ".join(acts_found) or "None"
