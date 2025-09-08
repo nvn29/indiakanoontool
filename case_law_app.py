@@ -20,7 +20,7 @@ except:
 state = st.session_state
 state.setdefault("search_history", [])
 
-# --- KNOWN ACTS ---
+# --- EXPANDED LIST OF INDIAN BARE ACTS WITH DIRECT PDF LINKS ---
 known_acts = {
     "Constitution of India": "https://legislative.gov.in/sites/default/files/COI_2024.pdf",
     "Indian Penal Code 1860": "https://www.indiacode.nic.in/repealedfileopen?rfilename=A1860-45.pdf",
@@ -55,7 +55,6 @@ known_acts = {
     "Bharatiya Nyaya Sanhita 2023": "https://www.indiacode.nic.in/repealedfileopen?rfilename=A2023-1.pdf",
     "Bharatiya Sakshya Adhiniyam 2023": "https://www.indiacode.nic.in/repealedfileopen?rfilename=A2023-2.pdf",
     "Bharatiya Nagarik Suraksha Sanhita 2023": "https://www.indiacode.nic.in/repealedfileopen?rfilename=A2023-3.pdf"
-    # ... (rest of your acts)
 }
 
 # --- SIDEBAR ---
@@ -106,8 +105,8 @@ if keyword_input:
         for act in detected_acts:
             act_url = known_acts[act]
             st.markdown(f"### {act}")
-            
-            # Try fetching PDF; fallback to direct link if fails
+            st.markdown(f"🔗 [View / Download PDF]({act_url})")
+
             try:
                 pdf_data = requests.get(act_url, timeout=15).content
                 st.download_button(
@@ -117,11 +116,10 @@ if keyword_input:
                     mime="application/pdf"
                 )
             except:
-                st.warning(f"⚠️ Unable to fetch PDF automatically. 👉 [Open '{act}' on IndiaCode]({act_url})")
+                st.warning("PDF not available for download.")
 
             results_data.append({"Title": act, "Link": act_url})
 
-        # Export options
         st.download_button("📄 Export PDF", export_pdf(results_data), "results.pdf", "application/pdf")
         st.download_button("📝 Export DOCX", export_docx(results_data), "results.docx",
                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
@@ -131,7 +129,7 @@ if keyword_input:
         # Unknown keyword → dynamic India Code search link
         st.write(f"### 📂 No known Act detected for `{keyword_input}`")
         search_url = f"https://www.indiacode.nic.in/handle/123456789/act-search?query={keyword_input.replace(' ', '+')}"
-        st.warning(f"⚠️ IndiaCode search might be unavailable. 👉 [Search manually]({search_url})")
+        st.markdown(f"🔗 [Search for '{keyword_input}' on India Code]({search_url})")
 
     if keyword_input not in state.search_history:
         state.search_history.insert(0, keyword_input)
