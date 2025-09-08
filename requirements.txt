@@ -1,9 +1,8 @@
-streamlit==1.38.0
-requests==2.32.3
-pandas==2.2.2
-fpdf==1.7.2
-python-docx==1.1.2
-Pillow==10.4.0
+streamlit
+requests
+pandas
 beautifulsoup4
-lxml
-XlsxWriter
+fpdf
+python-docx
+Pillow
+xlsxwriter
