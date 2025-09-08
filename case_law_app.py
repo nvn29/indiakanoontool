@@ -10,14 +10,11 @@ import requests
 st.set_page_config("Student Hub | LLB First Year", ":mortar_board:", layout="wide")
 
 # ---------------- SESSION STATE ----------------
-if "search_history" not in st.session_state:
-    st.session_state.search_history = []
-if "syllabus_files" not in st.session_state:
-    st.session_state.syllabus_files = {}  # store uploaded syllabus files per subject
-if "timetable_files" not in st.session_state:
-    st.session_state.timetable_files = []  # store uploaded timetable/resources files
-if "resource_links" not in st.session_state:
-    st.session_state.resource_links = []  # store user input links
+state = st.session_state
+state.setdefault("search_history", [])
+state.setdefault("syllabus_files", {})  # per subject
+state.setdefault("timetable_files", [])  # uploaded timetable/resources files
+state.setdefault("links", [])            # optional links entered by user
 
 # ---------------- HEADER ----------------
 def display_header():
@@ -74,7 +71,6 @@ tab1, tab2, tab3 = st.tabs(["📚 Syllabus & Notes", "🗓️ Timetable & Resour
 # ---------------- TAB 1: SYLLABUS ----------------
 with tab1:
     st.header("LLB(Hons) First Year Syllabus")
-
     subjects = [
         "Constitutional Law-I",
         "Environmental Law",
@@ -83,40 +79,38 @@ with tab1:
         "Law of Torts",
         "Contract-I"
     ]
-
-    for subj in subjects:
+    for idx, subj in enumerate(subjects):
         st.subheader(subj)
-        uploaded_file = st.file_uploader(f"Upload PDF/DOCX for {subj}", type=["pdf","docx"], key=subj)
+        uploaded_file = st.file_uploader(f"Upload PDF/DOCX for {subj}", type=["pdf","docx"], key=f"syllabus_{idx}")
         if uploaded_file:
-            st.session_state.syllabus_files[subj] = uploaded_file
+            state.syllabus_files[subj] = uploaded_file
             st.success(f"✅ Uploaded: {uploaded_file.name}")
 
-        # Provide download button if file exists
-        if subj in st.session_state.syllabus_files:
-            file = st.session_state.syllabus_files[subj]
+        # Download button for uploaded file
+        if subj in state.syllabus_files:
+            file = state.syllabus_files[subj]
             st.download_button(
-                f"📥 Download uploaded syllabus for {subj}", 
-                data=file, 
+                f"📥 Download uploaded syllabus for {subj}",
+                data=file,
                 file_name=file.name,
-                mime="application/pdf" if file.type=="application/pdf" 
-                     else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                mime=file.type,
+                key=f"syllabus_download_{idx}_{file.name}"
             )
 
 # ---------------- TAB 2: TIMETABLE & RESOURCES ----------------
 with tab2:
     st.header("Class Timetable & Resources")
-    
-    # Upload files (Excel/CSV, PDF/DOCX, Image)
     uploaded_files = st.file_uploader(
-        "Upload timetable or resources (Excel/CSV, PDF/DOCX, Image)", 
-        type=["xlsx","csv","pdf","docx","jpg","jpeg","png"], 
+        "Upload Excel/CSV, PDF/DOCX, or Images",
+        type=["xlsx","csv","pdf","docx","jpg","jpeg","png"],
         accept_multiple_files=True
     )
     if uploaded_files:
-        st.session_state.timetable_files.extend(uploaded_files)
-    
-    # Display uploaded files
-    for file in st.session_state.timetable_files:
+        for idx, file in enumerate(uploaded_files):
+            if file not in state.timetable_files:
+                state.timetable_files.append(file)
+
+    for idx, file in enumerate(state.timetable_files):
         st.subheader(file.name)
         # Excel/CSV
         if file.type in ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","text/csv"]:
@@ -126,39 +120,53 @@ with tab2:
                 else:
                     df = pd.read_excel(file)
                 st.dataframe(df)
-                st.download_button("📄 Export as PDF", export_pdf("Class Timetable", df.values.tolist()),
-                                   file.name.replace(".csv",".pdf").replace(".xlsx",".pdf"), "application/pdf")
-                st.download_button("📊 Export as Excel", export_excel(df),
-                                   file.name.replace(".csv",".xlsx").replace(".xlsx",".xlsx"),
-                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                st.download_button(
+                    "📄 Export as PDF",
+                    export_pdf("Class Timetable", df.values.tolist()),
+                    file_name=file.name.replace(".csv",".pdf").replace(".xlsx",".pdf"),
+                    mime="application/pdf",
+                    key=f"pdf_{idx}_{file.name}"
+                )
+                st.download_button(
+                    "📊 Export as Excel",
+                    export_excel(df),
+                    file_name=file.name.replace(".csv",".xlsx").replace(".xlsx",".xlsx"),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"excel_{idx}_{file.name}"
+                )
             except Exception as e:
                 st.error(f"Error reading file: {e}")
         # Images
         elif file.type.startswith("image"):
             st.image(file, width=400)
-            st.download_button(f"📥 Download {file.name}", data=file, file_name=file.name, mime=file.type)
+            st.download_button(
+                f"📥 Download {file.name}",
+                data=file,
+                file_name=file.name,
+                mime=file.type,
+                key=f"img_{idx}_{file.name}"
+            )
         # PDF/DOCX
         elif file.type in ["application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document"]:
-            st.download_button(f"📥 Download {file.name}", data=file, file_name=file.name, mime=file.type)
-    
-    # Option 1: Input links (YouTube/website)
-    st.markdown("### Add Resource Links")
-    link_input = st.text_input("Enter URL (YouTube, website, etc.)")
-    if st.button("➕ Add Link"):
-        if link_input:
-            st.session_state.resource_links.append(link_input)
-            st.success(f"Added link: {link_input}")
-    
-    # Display links
-    if st.session_state.resource_links:
-        st.markdown("### Your Resource Links")
-        for i, link in enumerate(st.session_state.resource_links, 1):
-            st.markdown(f"{i}. [🔗 {link}]({link})")
+            st.download_button(
+                f"📥 Download {file.name}",
+                data=file,
+                file_name=file.name,
+                mime=file.type,
+                key=f"doc_{idx}_{file.name}"
+            )
+    # Optional: Add simple link input
+    st.markdown("### Add resource links (YouTube/Website)")
+    new_link = st.text_input("Enter URL and press Enter")
+    if new_link:
+        if new_link not in state.links:
+            state.links.append(new_link)
+    for idx, link in enumerate(state.links):
+        st.markdown(f"- [🔗 {link}]({link})")
 
 # ---------------- TAB 3: CASE LAW / ACT SEARCH ----------------
 with tab3:
     st.header("Indian Legal Act Search Tool")
-
     known_acts = {
     "Constitution of India": "https://legislative.gov.in/sites/default/files/COI_2024.pdf",
     "Indian Penal Code 1860": "https://www.indiacode.nic.in/repealedfileopen?rfilename=A1860-45.pdf",
@@ -193,42 +201,38 @@ with tab3:
     "Bharatiya Nyaya Sanhita 2023": "https://www.indiacode.nic.in/repealedfileopen?rfilename=A2023-1.pdf",
     "Bharatiya Sakshya Adhiniyam 2023": "https://www.indiacode.nic.in/repealedfileopen?rfilename=A2023-2.pdf",
     "Bharatiya Nagarik Suraksha Sanhita 2023": "https://www.indiacode.nic.in/repealedfileopen?rfilename=A2023-3.pdf"
-        # Add more acts as needed
+        # ... add remaining acts
     }
-
     keyword_input = st.text_input(
         "Enter a legal keyword...",
-        st.selectbox("Previous Keywords", [""] + st.session_state.search_history)
+        st.selectbox("Previous Keywords", [""] + state.search_history)
     ).strip()
-    if st.button("🗑️ Clear History"):
-        st.session_state.search_history.clear()
+    if st.button("🗑️ Clear History", key="clear_history"):
+        state.search_history.clear()
         st.success("History cleared")
 
     if keyword_input:
         detected_acts = [act for act in known_acts if keyword_input.lower() in act.lower() or act.lower() in keyword_input.lower()]
         results_data = []
-
         if detected_acts:
             st.write(f"### 📂 Search Results for: `{keyword_input}`")
-            for act in detected_acts:
+            for idx, act in enumerate(detected_acts):
                 url = known_acts[act]
                 st.markdown(f"### {act}")
                 st.markdown(f"🔗 [View / Download PDF]({url})")
                 pdf_data = fetch_pdf(url, act)
                 if pdf_data:
-                    st.download_button(f"📄 Download PDF: {act}", pdf_data, act.replace(" ","_")+".pdf","application/pdf")
+                    st.download_button(f"📄 Download PDF: {act}", pdf_data, act.replace(" ","_")+".pdf","application/pdf", key=f"act_{idx}_{act}")
                 results_data.append({"Title": act, "Link": url})
-
-            st.download_button("📄 Export PDF", export_pdf("Indian Legal Acts", results_data), "results.pdf","application/pdf")
-            st.download_button("📝 Export DOCX", export_docx("Indian Legal Acts", results_data), "results.docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-            st.download_button("📊 Export Excel", export_excel(pd.DataFrame(results_data)), "results.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button("📄 Export PDF", export_pdf("Indian Legal Acts", results_data), "results.pdf","application/pdf", key="export_pdf")
+            st.download_button("📝 Export DOCX", export_docx("Indian Legal Acts", results_data), "results.docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document", key="export_docx")
+            st.download_button("📊 Export Excel", export_excel(pd.DataFrame(results_data)), "results.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="export_excel")
         else:
             search_url = f"https://www.indiacode.nic.in/handle/123456789/act-search?query={keyword_input.replace(' ','+')}"
             st.warning(f"⚠️ No known Act detected or IndiaCode may be down. Confirm via Google News or search manually 👉 [Search]({search_url})")
-
-        if keyword_input not in st.session_state.search_history:
-            st.session_state.search_history.insert(0, keyword_input)
-            st.session_state.search_history = st.session_state.search_history[:10]
+        if keyword_input not in state.search_history:
+            state.search_history.insert(0, keyword_input)
+            state.search_history = state.search_history[:10]
     else:
         st.warning("📥 Enter a legal keyword to search.")
 
