@@ -5,13 +5,13 @@ from docx import Document
 from PIL import Image
 
 # --- PAGE CONFIG ---
-st.set_page_config("Indian Case Law Search Tool", ":balance_scale:", layout="centered")
+st.set_page_config("Indian Case Law & Act Search Tool", ":balance_scale:", layout="centered")
 try:
     st.image(Image.open("logo.png"), width=100)
 except:
     st.markdown("""
         <div style='text-align:center;'>
-            <h1 style='margin-bottom:0;'>⚖️ Indian Case Law Search Tool</h1>
+            <h1 style='margin-bottom:0;'>⚖️ Indian Case Law & Act Search Tool</h1>
             <p style='font-size:16px;color:#555;'>Smart filters and act detection</p>
         </div>""", unsafe_allow_html=True)
 
@@ -77,15 +77,15 @@ with st.sidebar:
 # --- EXPORTS ---
 def export_pdf(data):
     pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, "Indian Case Law Results", ln=True, align="C")
+    pdf.cell(200, 10, "Indian Case Law & Act Results", ln=True, align="C")
     for i, c in enumerate(data, 1):
-        pdf.multi_cell(0, 10, f"{i}. {c['Title']}, {c['Court']} ({c['Year']})\n{c['Link']}\n")
+        pdf.multi_cell(0, 10, f"{i}. {c['Title']} | {c.get('Court','-')} ({c.get('Year','-')})\n{c['Link']}\n")
     return pdf.output(dest="S").encode("latin1")
 
 def export_docx(data):
-    doc = Document(); doc.add_heading("Indian Case Law Results", 0)
+    doc = Document(); doc.add_heading("Indian Case Law & Act Results", 0)
     for i, c in enumerate(data, 1):
-        doc.add_paragraph(f"{i}. {c['Title']}, {c['Court']} ({c['Year']})", style="List Number")
+        doc.add_paragraph(f"{i}. {c['Title']} | {c.get('Court','-')} ({c.get('Year','-')})", style="List Number")
         doc.add_paragraph(f"Link: {c['Link']}")
     buf = io.BytesIO(); doc.save(buf); buf.seek(0)
     return buf
@@ -96,81 +96,81 @@ def export_excel(data):
     buf.seek(0)
     return buf
 
-# --- SEARCH ---
+# --- SEARCH (India Code) ---
+def search_indiacode(keyword):
+    """
+    Search India Code for Acts matching a keyword.
+    Returns a list of Acts with title and URL.
+    """
+    base_url = "https://www.indiacode.nic.in/"
+    search_url = f"https://www.indiacode.nic.in/handle/123456789/15?query={keyword.replace(' ', '+')}"
+    
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        )
+    }
+    
+    res = requests.get(search_url, headers=headers, timeout=15)
+    if res.status_code != 200:
+        st.error(f"⚠️ Could not fetch data from India Code. Status: {res.status_code}")
+        return []
+
+    soup = BeautifulSoup(res.text, "html.parser")
+    acts = []
+
+    # Find all links containing the keyword in text
+    for link in soup.find_all("a", href=True):
+        if keyword.lower() in link.text.lower():
+            act_url = base_url + link['href']
+            acts.append({
+                "Title": link.text.strip(),
+                "Link": act_url,
+                "Court": "-", "Year": "-"
+            })
+    return acts
+
+# --- SEARCH EXECUTION ---
 if keyword:
     st.write(f"### 📂 Search Results for: `{keyword}`")
-    with st.spinner("🔎 Fetching from Indian Kanoon..."):
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            )
-        }
-
+    with st.spinner("🔎 Fetching from India Code..."):
         try:
-            url = f"https://indiankanoon.org/search/?formInput={keyword}"
-            st.write(f"🔎 Fetching from: {url}")  # Debug
-            res = requests.get(url, headers=headers, timeout=15)
-            st.write(f"📡 Response status: {res.status_code}")  # Debug
-
-            if res.status_code != 200:
-                st.error(f"⚠️ Could not fetch data. Status: {res.status_code}")
-                st.text(res.text[:500])  # Debug: show partial response
+            acts_found = search_indiacode(keyword)
+            if not acts_found:
+                st.info("No Acts found matching your keyword.")
             else:
-                soup = BeautifulSoup(res.text, "html.parser")
-                results, cases = soup.find_all("div", class_="result_title"), []
-                st.write(f"📂 Found {len(results)} raw results")  # Debug
+                st.success(f"✅ {len(acts_found)} Act(s) found")
+                for i, act in enumerate(acts_found, 1):
+                    st.markdown(f"### {i}. {act['Title']}")
+                    st.markdown(f"🔗 [View Act]({act['Link']})")
+                    # Optional: add download button for PDF
+                    pdf_filename = act['Title'].replace(' ', '_') + ".pdf"
+                    try:
+                        pdf_response = requests.get(act['Link'], timeout=15)
+                        st.download_button(
+                            f"📄 Download PDF: {act['Title']}",
+                            data=pdf_response.content,
+                            file_name=pdf_filename,
+                            mime="application/pdf"
+                        )
+                    except:
+                        st.warning("PDF not available for direct download.")
 
-                for result in results[:20]:
-                    title = result.get_text(strip=True)
-                    link = "https://indiankanoon.org" + result.find("a")["href"]
-                    snippet_div = result.find_next_sibling("div")
-                    snippet = snippet_div.get_text(strip=True) if snippet_div else ""
+                # Export buttons
+                if keyword not in state.search_history:
+                    state.search_history.insert(0, keyword)
+                    state.search_history = state.search_history[:10]
 
-                    year_match = re.search(r'\b(19|20)\d{2}\b', snippet)
-                    year = int(year_match.group()) if year_match else None
-                    if year and not (year_range[0] <= year <= year_range[1]):
-                        continue
-                    if court != "All Courts" and court.lower().split(" high court")[0] not in snippet.lower() and court.lower() not in snippet.lower():
-                        continue
-                    if district and district.lower() not in title.lower():
-                        continue
-                    if ipc_filter_enabled and "IPC" not in snippet.upper():
-                        continue
-
-                    acts_found = [act for act in known_acts if act.lower() in snippet.lower()]
-                    cases.append({
-                        "Title": title, "Link": link, "Year": year or "-", "Court": court,
-                        "Bluebook Citation": f"{title}, {court} ({year})",
-                        "APA Citation": f"{court}. ({year}). {title}. Retrieved from {link}",
-                        "Detected Acts": ", ".join(acts_found) or "None"
-                    })
-
-                if not cases:
-                    st.info("No results found.")
-                else:
-                    st.success(f"✅ {len(cases)} case(s) found")
-                    for i, c in enumerate(cases, 1):
-                        st.markdown(f"### {i}. {c['Title']}")
-                        st.markdown(f"**📅 Year**: {c['Year']} | **🏛️ Court**: {c['Court']} | **📘 Acts**: {c['Detected Acts']}")
-                        st.markdown(f"🔗 [View Case]({c['Link']})")
-                        st.caption(f"📘 Bluebook: {c['Bluebook Citation']}")
-                        st.caption(f"📚 APA: {c['APA Citation']}")
-
-                    if keyword not in state.search_history:
-                        state.search_history.insert(0, keyword)
-                        state.search_history = state.search_history[:10]
-
-                    st.download_button("📄 PDF", export_pdf(cases), "case_results.pdf", "application/pdf")
-                    st.download_button("📝 DOCX", export_docx(cases), "case_results.docx",
-                                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-                    st.download_button("📊 Excel", export_excel(cases), "case_results.xlsx",
-                                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
+                st.download_button("📄 Export PDF", export_pdf(acts_found), "results.pdf", "application/pdf")
+                st.download_button("📝 Export DOCX", export_docx(acts_found), "results.docx",
+                                   "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                st.download_button("📊 Export Excel", export_excel(acts_found), "results.xlsx",
+                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         except Exception as e:
-            st.error(f"⚠️ Request failed: {e}")
-            st.exception(e)  # Full traceback in logs
+            st.error(f"⚠️ Search failed: {e}")
+            st.exception(e)
 else:
     st.warning("📥 Enter a keyword to search.")
 
@@ -180,6 +180,6 @@ st.markdown("""
 <div style='text-align: center; font-size: 14px; color: gray;'>
     Created by <strong>Naveen Yadav</strong><br>
     <em>LLB(Hons) First Year, Sushant University, Gurugram</em><br>
-    ⚖️ Indian Case Law Search Tool | © 2025
+    ⚖️ Indian Case Law & Act Search Tool | © 2025
 </div>
 """, unsafe_allow_html=True)
